@@ -33,7 +33,7 @@ which in turn will create the resulting routers, services, handlers, etc.
 
 ```yaml tab="File (YAML)"
 kind: Ingress
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1beta1
 metadata:
   name: "foo"
   namespace: production
