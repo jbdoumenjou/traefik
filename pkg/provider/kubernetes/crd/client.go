@@ -166,7 +166,10 @@ func (c *clientWrapper) WatchAll(namespaces []string, stopCh <-chan struct{}) (<
 		factoryCrd.Traefik().V1alpha1().TraefikServices().Informer().AddEventHandler(eventHandler)
 
 		factoryKube := informers.NewSharedInformerFactoryWithOptions(c.csKube, resyncPeriod, informers.WithNamespace(ns))
+		// TODO: Check if we need to listen to ingress events in the CRD client
 		factoryKube.Extensions().V1beta1().Ingresses().Informer().AddEventHandler(eventHandler)
+		// TODO: check if we need to have both events handler for retro-comptability with ingress apiVersion
+		factoryKube.Networking().V1beta1().Ingresses().Informer().AddEventHandler(eventHandler)
 		factoryKube.Core().V1().Services().Informer().AddEventHandler(eventHandler)
 		factoryKube.Core().V1().Endpoints().Informer().AddEventHandler(eventHandler)
 		factoryKube.Core().V1().Secrets().Informer().AddEventHandler(eventHandler)

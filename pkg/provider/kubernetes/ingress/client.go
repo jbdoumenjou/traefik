@@ -136,6 +136,8 @@ func (c *clientWrapper) WatchAll(namespaces []string, stopCh <-chan struct{}) (<
 	for _, ns := range namespaces {
 		factory := informers.NewSharedInformerFactoryWithOptions(c.clientset, resyncPeriod, informers.WithNamespace(ns))
 		factory.Extensions().V1beta1().Ingresses().Informer().AddEventHandler(eventHandler)
+		// TODO: check if we need to listen to this event for retro compatibility with ingress apiVersion
+		factory.Networking().V1beta1().Ingresses().Informer().AddEventHandler(eventHandler)
 		factory.Core().V1().Services().Informer().AddEventHandler(eventHandler)
 		factory.Core().V1().Endpoints().Informer().AddEventHandler(eventHandler)
 		factory.Core().V1().Secrets().Informer().AddEventHandler(eventHandler)
