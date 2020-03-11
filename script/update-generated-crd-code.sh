@@ -4,6 +4,12 @@ HACK_DIR="$( cd "$( dirname "${0}" )" && pwd -P)"; export HACK_DIR
 REPO_ROOT=${HACK_DIR}/..
 TRAEFIK_MODULE_VERSION=v2
 
+CRD_SRC_PATH="${REPO_ROOT}"/pkg/provider/kubernetes/crd/traefik/...
+CRD_OUTPUT_PATH="${REPO_ROOT}"/docs/content/reference/dynamic-configuration
+
+# Generate the CRD definitions
+go run sigs.k8s.io/controller-tools/cmd/controller-gen rbac:roleName=traefik-ingress-controller paths="${CRD_SRC_PATH}" output:dir="${CRD_OUTPUT_PATH}"/rbac crd:crdVersions=v1 paths="${CRD_SRC_PATH}" output:crd:dir="${CRD_OUTPUT_PATH}"/crds
+
 rm -rf "${REPO_ROOT}"/vendor
 go mod vendor
 chmod +x "${REPO_ROOT}"/vendor/k8s.io/code-generator/*.sh
