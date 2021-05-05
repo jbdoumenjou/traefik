@@ -121,7 +121,7 @@ Default middlewares for the routers linked to the entry point.
 Applies a permanent redirection. (Default: ```true```)
 
 `--entrypoints.<name>.http.redirections.entrypoint.priority`:  
-Priority of the generated router. (Default: ```2147483647```)
+Priority of the generated router. (Default: ```2147483646```)
 
 `--entrypoints.<name>.http.redirections.entrypoint.scheme`:  
 Scheme used for the redirection. (Default: ```https```)
@@ -193,7 +193,7 @@ plugin's module name.
 plugin's version.
 
 `--global.checknewversion`:  
-Periodically check if a new version has been released. (Default: ```false```)
+Periodically check if a new version has been released. (Default: ```true```)
 
 `--global.sendanonymoususage`:  
 Periodically send anonymous usage statistics. If the option is not specified, it will be enabled by default. (Default: ```false```)
@@ -231,6 +231,9 @@ Enable metrics on entry points. (Default: ```true```)
 `--metrics.datadog.address`:  
 Datadog's address. (Default: ```localhost:8125```)
 
+`--metrics.datadog.addrouterslabels`:  
+Enable metrics on routers. (Default: ```false```)
+
 `--metrics.datadog.addserviceslabels`:  
 Enable metrics on services. (Default: ```true```)
 
@@ -245,6 +248,9 @@ Enable metrics on entry points. (Default: ```true```)
 
 `--metrics.influxdb.address`:  
 InfluxDB address. (Default: ```localhost:8089```)
+
+`--metrics.influxdb.addrouterslabels`:  
+Enable metrics on routers. (Default: ```false```)
 
 `--metrics.influxdb.addserviceslabels`:  
 Enable metrics on services. (Default: ```true```)
@@ -273,6 +279,9 @@ Prometheus metrics exporter type. (Default: ```false```)
 `--metrics.prometheus.addentrypointslabels`:  
 Enable metrics on entry points. (Default: ```true```)
 
+`--metrics.prometheus.addrouterslabels`:  
+Enable metrics on routers. (Default: ```false```)
+
 `--metrics.prometheus.addserviceslabels`:  
 Enable metrics on services. (Default: ```true```)
 
@@ -294,6 +303,9 @@ Enable metrics on entry points. (Default: ```true```)
 `--metrics.statsd.address`:  
 StatsD address. (Default: ```localhost:8125```)
 
+`--metrics.statsd.addrouterslabels`:  
+Enable metrics on routers. (Default: ```false```)
+
 `--metrics.statsd.addserviceslabels`:  
 Enable metrics on services. (Default: ```true```)
 
@@ -302,6 +314,9 @@ Prefix to use for metrics collection. (Default: ```traefik```)
 
 `--metrics.statsd.pushinterval`:  
 StatsD push interval. (Default: ```10```)
+
+`--pilot.dashboard`:  
+Enable Traefik Pilot in the dashboard. (Default: ```true```)
 
 `--pilot.token`:  
 Traefik Pilot token.
@@ -403,7 +418,7 @@ Expose containers by default. (Default: ```true```)
 Prefix for consul service tags. Default 'traefik' (Default: ```traefik```)
 
 `--providers.consulcatalog.refreshinterval`:  
-Interval for check Consul API. Default 100ms (Default: ```15```)
+Interval for check Consul API. Default 15s (Default: ```15```)
 
 `--providers.consulcatalog.requireconsistent`:  
 Forces the read to be fully consistent. (Default: ```false```)
@@ -616,7 +631,7 @@ Kubernetes certificate authority file path (not needed for in-cluster client).
 Kubernetes server endpoint (required for external cluster client).
 
 `--providers.kubernetesingress.ingressclass`:  
-Value of kubernetes.io/ingress.class annotation to watch for.
+Value of kubernetes.io/ingress.class annotation or IngressClass name to watch for.
 
 `--providers.kubernetesingress.ingressendpoint.hostname`:  
 Hostname used for Kubernetes Ingress endpoints.
@@ -703,7 +718,7 @@ Display additional provider logs. (Default: ```false```)
 Watch provider. (Default: ```true```)
 
 `--providers.providersthrottleduration`:  
-Backends throttle duration: minimum duration between 2 events from providers before applying a new configuration. It avoids unnecessary reloads if multiples events are sent in a short amount of time. (Default: ```0```)
+Backends throttle duration: minimum duration between 2 events from providers before applying a new configuration. It avoids unnecessary reloads if multiples events are sent in a short amount of time. (Default: ```2```)
 
 `--providers.rancher`:  
 Enable Rancher backend with default settings. (Default: ```false```)
@@ -811,7 +826,7 @@ The amount of time to wait for a server's response headers after fully writing t
 Disable SSL certificate verification. (Default: ```false```)
 
 `--serverstransport.maxidleconnsperhost`:  
-If non-zero, controls the maximum idle (keep-alive) to keep per-host. If zero, DefaultMaxIdleConnsPerHost is used (Default: ```0```)
+If non-zero, controls the maximum idle (keep-alive) to keep per-host. If zero, DefaultMaxIdleConnsPerHost is used (Default: ```200```)
 
 `--serverstransport.rootcas`:  
 Add cert file for self-signed certificate.

@@ -9,7 +9,7 @@ import (
 	"github.com/traefik/traefik/v2/pkg/config/dynamic"
 	"github.com/traefik/traefik/v2/pkg/provider"
 	"github.com/traefik/traefik/v2/pkg/tls"
-	"sigs.k8s.io/service-apis/apis/v1alpha1"
+	"sigs.k8s.io/gateway-api/apis/v1alpha1"
 )
 
 var _ provider.Provider = (*Provider)(nil)
@@ -235,6 +235,92 @@ func TestLoadHTTPRoutes(t *testing.T) {
 			},
 		},
 		{
+			desc:  "Simple HTTPRoute, with api@internal service",
+			paths: []string{"services.yml", "simple_to_api_internal.yml"},
+			entryPoints: map[string]Entrypoint{"web": {
+				Address: ":80",
+			}},
+			expected: &dynamic.Configuration{
+				UDP: &dynamic.UDPConfiguration{
+					Routers:  map[string]*dynamic.UDPRouter{},
+					Services: map[string]*dynamic.UDPService{},
+				},
+				TCP: &dynamic.TCPConfiguration{
+					Routers:  map[string]*dynamic.TCPRouter{},
+					Services: map[string]*dynamic.TCPService{},
+				},
+				HTTP: &dynamic.HTTPConfiguration{
+					Routers: map[string]*dynamic.Router{
+						"default-http-app-1-my-gateway-web-1c0cf64bde37d9d0df06": {
+							EntryPoints: []string{"web"},
+							Service:     "api@internal",
+							Rule:        "Host(`foo.com`) && Path(`/bar`)",
+						},
+					},
+					Middlewares: map[string]*dynamic.Middleware{},
+					Services:    map[string]*dynamic.Service{},
+				},
+				TLS: &dynamic.TLSConfiguration{},
+			},
+		},
+		{
+			desc:  "Simple HTTPRoute, with myservice@file service",
+			paths: []string{"services.yml", "simple_cross_provider.yml"},
+			entryPoints: map[string]Entrypoint{"web": {
+				Address: ":80",
+			}},
+			expected: &dynamic.Configuration{
+				UDP: &dynamic.UDPConfiguration{
+					Routers:  map[string]*dynamic.UDPRouter{},
+					Services: map[string]*dynamic.UDPService{},
+				},
+				TCP: &dynamic.TCPConfiguration{
+					Routers:  map[string]*dynamic.TCPRouter{},
+					Services: map[string]*dynamic.TCPService{},
+				},
+				HTTP: &dynamic.HTTPConfiguration{
+					Routers: map[string]*dynamic.Router{
+						"default-http-app-1-my-gateway-web-1c0cf64bde37d9d0df06": {
+							EntryPoints: []string{"web"},
+							Service:     "default-http-app-1-my-gateway-web-1c0cf64bde37d9d0df06-wrr",
+							Rule:        "Host(`foo.com`) && Path(`/bar`)",
+						},
+					},
+					Middlewares: map[string]*dynamic.Middleware{},
+					Services: map[string]*dynamic.Service{
+						"default-http-app-1-my-gateway-web-1c0cf64bde37d9d0df06-wrr": {
+							Weighted: &dynamic.WeightedRoundRobin{
+								Services: []dynamic.WRRService{
+									{
+										Name:   "service@file",
+										Weight: func(i int) *int { return &i }(1),
+									},
+									{
+										Name:   "default-whoami-80",
+										Weight: func(i int) *int { return &i }(1),
+									},
+								},
+							},
+						},
+						"default-whoami-80": {
+							LoadBalancer: &dynamic.ServersLoadBalancer{
+								Servers: []dynamic.Server{
+									{
+										URL: "http://10.10.0.1:80",
+									},
+									{
+										URL: "http://10.10.0.2:80",
+									},
+								},
+								PassHostHeader: Bool(true),
+							},
+						},
+					},
+				},
+				TLS: &dynamic.TLSConfiguration{},
+			},
+		},
+		{
 			desc:  "Simple HTTPRoute with protocol HTTPS",
 			paths: []string{"services.yml", "with_protocol_https.yml"},
 			entryPoints: map[string]Entrypoint{"websecure": {
@@ -323,6 +409,112 @@ func TestLoadHTTPRoutes(t *testing.T) {
 					Middlewares: map[string]*dynamic.Middleware{},
 					Services: map[string]*dynamic.Service{
 						"default-http-app-1-my-gateway-web-75dd1ad561e42725558a-wrr": {
+							Weighted: &dynamic.WeightedRoundRobin{
+								Services: []dynamic.WRRService{
+									{
+										Name:   "default-whoami-80",
+										Weight: func(i int) *int { return &i }(1),
+									},
+								},
+							},
+						},
+						"default-whoami-80": {
+							LoadBalancer: &dynamic.ServersLoadBalancer{
+								Servers: []dynamic.Server{
+									{
+										URL: "http://10.10.0.1:80",
+									},
+									{
+										URL: "http://10.10.0.2:80",
+									},
+								},
+								PassHostHeader: Bool(true),
+							},
+						},
+					},
+				},
+				TLS: &dynamic.TLSConfiguration{},
+			},
+		},
+		{
+			desc:  "Simple HTTPRoute, with two hosts one wildcard",
+			paths: []string{"services.yml", "with_two_hosts_one_wildcard.yml"},
+			entryPoints: map[string]Entrypoint{"web": {
+				Address: ":80",
+			}},
+			expected: &dynamic.Configuration{
+				UDP: &dynamic.UDPConfiguration{
+					Routers:  map[string]*dynamic.UDPRouter{},
+					Services: map[string]*dynamic.UDPService{},
+				},
+				TCP: &dynamic.TCPConfiguration{
+					Routers:  map[string]*dynamic.TCPRouter{},
+					Services: map[string]*dynamic.TCPService{},
+				},
+				HTTP: &dynamic.HTTPConfiguration{
+					Routers: map[string]*dynamic.Router{
+						"default-http-app-1-my-gateway-web-2dbd7883f5537db39bca": {
+							EntryPoints: []string{"web"},
+							Service:     "default-http-app-1-my-gateway-web-2dbd7883f5537db39bca-wrr",
+							Rule:        "(Host(`foo.com`) || HostRegexp(`{subdomain:[a-zA-Z0-9-]+}.bar.com`)) && PathPrefix(`/`)",
+						},
+					},
+					Middlewares: map[string]*dynamic.Middleware{},
+					Services: map[string]*dynamic.Service{
+						"default-http-app-1-my-gateway-web-2dbd7883f5537db39bca-wrr": {
+							Weighted: &dynamic.WeightedRoundRobin{
+								Services: []dynamic.WRRService{
+									{
+										Name:   "default-whoami-80",
+										Weight: func(i int) *int { return &i }(1),
+									},
+								},
+							},
+						},
+						"default-whoami-80": {
+							LoadBalancer: &dynamic.ServersLoadBalancer{
+								Servers: []dynamic.Server{
+									{
+										URL: "http://10.10.0.1:80",
+									},
+									{
+										URL: "http://10.10.0.2:80",
+									},
+								},
+								PassHostHeader: Bool(true),
+							},
+						},
+					},
+				},
+				TLS: &dynamic.TLSConfiguration{},
+			},
+		},
+		{
+			desc:  "Simple HTTPRoute, with one host and a wildcard",
+			paths: []string{"services.yml", "with_two_hosts_wildcard.yml"},
+			entryPoints: map[string]Entrypoint{"web": {
+				Address: ":80",
+			}},
+			expected: &dynamic.Configuration{
+				UDP: &dynamic.UDPConfiguration{
+					Routers:  map[string]*dynamic.UDPRouter{},
+					Services: map[string]*dynamic.UDPService{},
+				},
+				TCP: &dynamic.TCPConfiguration{
+					Routers:  map[string]*dynamic.TCPRouter{},
+					Services: map[string]*dynamic.TCPService{},
+				},
+				HTTP: &dynamic.HTTPConfiguration{
+					Routers: map[string]*dynamic.Router{
+						"default-http-app-1-my-gateway-web-a431b128267aabc954fd": {
+							EntryPoints: []string{"web"},
+							Service:     "default-http-app-1-my-gateway-web-a431b128267aabc954fd-wrr",
+							Rule:        "PathPrefix(`/`)",
+						},
+					},
+					Middlewares: map[string]*dynamic.Middleware{},
+					Services: map[string]*dynamic.Service{
+						"default-http-app-1-my-gateway-web-a431b128267aabc954fd-wrr": {
 							Weighted: &dynamic.WeightedRoundRobin{
 								Services: []dynamic.WRRService{
 									{
@@ -759,6 +951,7 @@ func TestHostRule(t *testing.T) {
 		desc         string
 		routeSpec    v1alpha1.HTTPRouteSpec
 		expectedRule string
+		expectErr    bool
 	}{
 		{
 			desc:         "Empty rule and matches",
@@ -793,7 +986,7 @@ func TestHostRule(t *testing.T) {
 					"Bir",
 				},
 			},
-			expectedRule: "Host(`Foo`, `Bir`)",
+			expectedRule: "",
 		},
 		{
 			desc: "Multiple empty hosts",
@@ -806,14 +999,77 @@ func TestHostRule(t *testing.T) {
 			},
 			expectedRule: "",
 		},
+		{
+			desc: "Several Host and wildcard",
+			routeSpec: v1alpha1.HTTPRouteSpec{
+				Hostnames: []v1alpha1.Hostname{
+					"*.bar.foo",
+					"bar.foo",
+					"foo.foo",
+				},
+			},
+			expectedRule: "(Host(`bar.foo`, `foo.foo`) || HostRegexp(`{subdomain:[a-zA-Z0-9-]+}.bar.foo`))",
+		},
+		{
+			desc: "Host with wildcard",
+			routeSpec: v1alpha1.HTTPRouteSpec{
+				Hostnames: []v1alpha1.Hostname{
+					"*.bar.foo",
+				},
+			},
+			expectedRule: "HostRegexp(`{subdomain:[a-zA-Z0-9-]+}.bar.foo`)",
+		},
+		{
+			desc: "Alone wildcard",
+			routeSpec: v1alpha1.HTTPRouteSpec{
+				Hostnames: []v1alpha1.Hostname{
+					"*",
+					"*.foo.foo",
+				},
+			},
+		},
+		{
+			desc: "Multiple alone Wildcard",
+			routeSpec: v1alpha1.HTTPRouteSpec{
+				Hostnames: []v1alpha1.Hostname{
+					"foo.foo",
+					"*.*",
+				},
+			},
+			expectErr: true,
+		},
+		{
+			desc: "Multiple Wildcard",
+			routeSpec: v1alpha1.HTTPRouteSpec{
+				Hostnames: []v1alpha1.Hostname{
+					"foo.foo",
+					"*.toto.*.bar.foo",
+				},
+			},
+			expectErr: true,
+		},
+		{
+			desc: "Multiple subdomain with misplaced wildcard",
+			routeSpec: v1alpha1.HTTPRouteSpec{
+				Hostnames: []v1alpha1.Hostname{
+					"foo.foo",
+					"toto.*.bar.foo",
+				},
+			},
+			expectErr: true,
+		},
 	}
 
 	for _, test := range testCases {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			t.Parallel()
+			rule, err := hostRule(test.routeSpec)
 
-			assert.Equal(t, test.expectedRule, hostRule(test.routeSpec))
+			assert.Equal(t, test.expectedRule, rule)
+			if test.expectErr {
+				assert.Error(t, err)
+			}
 		})
 	}
 }
