@@ -721,7 +721,11 @@ Display additional provider logs. (Default: ```false```)
 Watch provider. (Default: ```true```)
 
 `--providers.plugin.<name>`:  
+<<<<<<< HEAD
 Plugins configuration.
+=======
+
+>>>>>>> 4f6bf53f8 (wip)
 
 `--providers.providersthrottleduration`:  
 Backends throttle duration: minimum duration between 2 events from providers before applying a new configuration. It avoids unnecessary reloads if multiples events are sent in a short amount of time. (Default: ```2```)

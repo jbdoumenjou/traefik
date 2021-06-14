@@ -394,7 +394,7 @@ func (p *Provider) fillGatewayConf(ctx context.Context, client Client, gateway *
 
 		// TLS
 		if listener.Protocol == v1alpha1.HTTPSProtocolType || listener.Protocol == v1alpha1.TLSProtocolType {
-			if listener.TLS == nil || (listener.TLS.CertificateRef == nil && listener.TLS.Mode != v1alpha1.TLSModePassthrough) {
+			if listener.TLS == nil || (listener.TLS.CertificateRef == nil && listener.TLS.Mode != nil && *listener.TLS.Mode != v1alpha1.TLSModePassthrough) {
 				// update "Detached" status with "UnsupportedProtocol" reason
 				listenerStatuses[i].Conditions = append(listenerStatuses[i].Conditions, metav1.Condition{
 					Type:               string(v1alpha1.ListenerConditionDetached),
@@ -407,12 +407,12 @@ func (p *Provider) fillGatewayConf(ctx context.Context, client Client, gateway *
 				continue
 			}
 
-			if listener.TLS.Mode == v1alpha1.TLSModePassthrough && listener.TLS.CertificateRef != nil {
+			if listener.TLS.Mode != nil && *listener.TLS.Mode == v1alpha1.TLSModePassthrough && listener.TLS.CertificateRef != nil {
 				// https://gateway-api.sigs.k8s.io/guides/tls/
 				logger.Warnf("In case of Passthrough TLS mode, no TLS settings take effect as the TLS session from the client is NOT terminated at the Gateway")
 			}
 
-			isTLSPassthrough := listener.TLS.Mode == v1alpha1.TLSModePassthrough
+			isTLSPassthrough := listener.TLS.Mode != nil && *listener.TLS.Mode == v1alpha1.TLSModePassthrough
 
 			// Allowed configurations:
 			// Protocol TLS -> Passthrough -> TLSRoute
@@ -422,13 +422,18 @@ func (p *Provider) fillGatewayConf(ctx context.Context, client Client, gateway *
 				listener.Protocol == v1alpha1.TLSProtocolType && !isTLSPassthrough && listener.Routes.Kind == routeTCPKind ||
 				listener.Protocol == v1alpha1.HTTPSProtocolType && !isTLSPassthrough && listener.Routes.Kind == routeHTTPKind) {
 				// update "ConditionDetached" status true with "ReasonUnsupportedProtocol" reason
+				mode := "unknown"
+				if listener.TLS.Mode != nil {
+					mode = string(*listener.TLS.Mode)
+				}
+
 				listenerStatuses[i].Conditions = append(listenerStatuses[i].Conditions, metav1.Condition{
 					Type:               string(v1alpha1.ListenerConditionDetached),
 					Status:             metav1.ConditionTrue,
 					LastTransitionTime: metav1.Now(),
 					Reason:             string(v1alpha1.ListenerReasonUnsupportedProtocol),
 					Message: fmt.Sprintf("Unsupported route kind %q with %q",
-						listener.Routes.Kind, listener.TLS.Mode),
+						listener.Routes.Kind, mode),
 				})
 
 				continue
@@ -741,7 +746,7 @@ func gatewayTLSRouteToTCPConf(ctx context.Context, ep string, listener v1alpha1.
 			if listener.TLS != nil {
 				// TODO support let's encrypt
 				router.TLS = &dynamic.RouterTCPTLSConfig{
-					Passthrough: listener.TLS.Mode == v1alpha1.TLSModePassthrough,
+					Passthrough: listener.TLS.Mode != nil && *listener.TLS.Mode == v1alpha1.TLSModePassthrough,
 				}
 			}
 
@@ -945,26 +950,28 @@ func extractRule(routeRule v1alpha1.HTTPRouteRule, hostRule string) (string, err
 	var matchesRules []string
 
 	for _, match := range routeRule.Matches {
-		if len(match.Path.Type) == 0 && match.Headers == nil {
+		if (match.Path == nil || match.Path.Type == nil) && match.Headers == nil {
 			continue
 		}
 
 		var matchRules []string
 		// TODO handle other path types
-		if len(match.Path.Type) > 0 {
-			switch match.Path.Type {
+		if match.Path != nil && match.Path.Type != nil && match.Path.Value != nil {
+			value := string(*match.Path.Value)
+
+			switch *match.Path.Type {
 			case v1alpha1.PathMatchExact:
-				matchRules = append(matchRules, "Path(`"+match.Path.Value+"`)")
+				matchRules = append(matchRules, "Path(`"+value+"`)")
 			case v1alpha1.PathMatchPrefix:
-				matchRules = append(matchRules, "PathPrefix(`"+match.Path.Value+"`)")
+				matchRules = append(matchRules, "PathPrefix(`"+value+"`)")
 			default:
-				return "", fmt.Errorf("unsupported path match %s", match.Path.Type)
+				return "", fmt.Errorf("unsupported path match %s", string(*match.Path.Type))
 			}
 		}
 
 		// TODO handle other headers types
-		if match.Headers != nil {
-			switch match.Headers.Type {
+		if match.Headers != nil && match.Headers.Type != nil {
+			switch *match.Headers.Type {
 			case v1alpha1.HeaderMatchExact:
 				var headerRules []string
 
@@ -975,7 +982,7 @@ func extractRule(routeRule v1alpha1.HTTPRouteRule, hostRule string) (string, err
 				sort.Strings(headerRules)
 				matchRules = append(matchRules, headerRules...)
 			default:
-				return "", fmt.Errorf("unsupported header match type %s", match.Headers.Type)
+				return "", fmt.Errorf("unsupported header match type %s", string(*match.Headers.Type))
 			}
 		}
 
@@ -1128,7 +1135,10 @@ func loadServices(client Client, namespace string, targets []v1alpha1.HTTPRouteF
 	}
 
 	for _, forwardTo := range targets {
-		weight := int(forwardTo.Weight)
+		weight := 1
+		if forwardTo.Weight != nil {
+			weight = int(*forwardTo.Weight)
+		}
 
 		if forwardTo.ServiceName == nil && forwardTo.BackendRef != nil {
 			if !(forwardTo.BackendRef.Group == traefikServiceGroupName && forwardTo.BackendRef.Kind == traefikServiceKind) {
@@ -1250,7 +1260,10 @@ func loadTCPServices(client Client, namespace string, targets []v1alpha1.RouteFo
 	}
 
 	for _, forwardTo := range targets {
-		weight := int(forwardTo.Weight)
+		weight := 1
+		if forwardTo.Weight != nil {
+			weight = int(*forwardTo.Weight)
+		}
 
 		if forwardTo.ServiceName == nil && forwardTo.BackendRef != nil {
 			if !(forwardTo.BackendRef.Group == traefikServiceGroupName && forwardTo.BackendRef.Kind == traefikServiceKind) {
