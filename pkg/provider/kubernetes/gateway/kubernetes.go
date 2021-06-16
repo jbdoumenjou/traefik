@@ -394,7 +394,12 @@ func (p *Provider) fillGatewayConf(ctx context.Context, client Client, gateway *
 
 		// TLS
 		if listener.Protocol == v1alpha1.HTTPSProtocolType || listener.Protocol == v1alpha1.TLSProtocolType {
-			if listener.TLS == nil || (listener.TLS.CertificateRef == nil && listener.TLS.Mode != nil && *listener.TLS.Mode != v1alpha1.TLSModePassthrough) {
+			var tlsMode v1alpha1.TLSModeType
+			if listener.TLS != nil && listener.TLS.Mode != nil {
+				tlsMode = *listener.TLS.Mode
+			}
+
+			if listener.TLS == nil || (listener.TLS.CertificateRef == nil && tlsMode != v1alpha1.TLSModePassthrough) {
 				// update "Detached" status with "UnsupportedProtocol" reason
 				listenerStatuses[i].Conditions = append(listenerStatuses[i].Conditions, metav1.Condition{
 					Type:               string(v1alpha1.ListenerConditionDetached),
@@ -407,12 +412,12 @@ func (p *Provider) fillGatewayConf(ctx context.Context, client Client, gateway *
 				continue
 			}
 
-			if listener.TLS.Mode != nil && *listener.TLS.Mode == v1alpha1.TLSModePassthrough && listener.TLS.CertificateRef != nil {
+			if tlsMode == v1alpha1.TLSModePassthrough && listener.TLS.CertificateRef != nil {
 				// https://gateway-api.sigs.k8s.io/guides/tls/
 				logger.Warnf("In case of Passthrough TLS mode, no TLS settings take effect as the TLS session from the client is NOT terminated at the Gateway")
 			}
 
-			isTLSPassthrough := listener.TLS.Mode != nil && *listener.TLS.Mode == v1alpha1.TLSModePassthrough
+			isTLSPassthrough := tlsMode == v1alpha1.TLSModePassthrough
 
 			// Allowed configurations:
 			// Protocol TLS -> Passthrough -> TLSRoute
@@ -421,19 +426,15 @@ func (p *Provider) fillGatewayConf(ctx context.Context, client Client, gateway *
 			if !(listener.Protocol == v1alpha1.TLSProtocolType && isTLSPassthrough && listener.Routes.Kind == routeTLSKind ||
 				listener.Protocol == v1alpha1.TLSProtocolType && !isTLSPassthrough && listener.Routes.Kind == routeTCPKind ||
 				listener.Protocol == v1alpha1.HTTPSProtocolType && !isTLSPassthrough && listener.Routes.Kind == routeHTTPKind) {
-				// update "ConditionDetached" status true with "ReasonUnsupportedProtocol" reason
-				mode := "unknown"
-				if listener.TLS.Mode != nil {
-					mode = string(*listener.TLS.Mode)
-				}
 
+				// update "ConditionDetached" status true with "ReasonUnsupportedProtocol" reason
 				listenerStatuses[i].Conditions = append(listenerStatuses[i].Conditions, metav1.Condition{
 					Type:               string(v1alpha1.ListenerConditionDetached),
 					Status:             metav1.ConditionTrue,
 					LastTransitionTime: metav1.Now(),
 					Reason:             string(v1alpha1.ListenerReasonUnsupportedProtocol),
 					Message: fmt.Sprintf("Unsupported route kind %q with %q",
-						listener.Routes.Kind, mode),
+						listener.Routes.Kind, tlsMode),
 				})
 
 				continue
@@ -489,7 +490,11 @@ func (p *Provider) fillGatewayConf(ctx context.Context, client Client, gateway *
 
 func gatewayHTTPRouteToHTTPConf(ctx context.Context, ep string, listener v1alpha1.Listener, gateway *v1alpha1.Gateway, client Client, conf *dynamic.Configuration) []metav1.Condition {
 	// TODO: support RouteNamespaces
-	selector := labels.SelectorFromSet(listener.Routes.Selector.MatchLabels)
+	selector := labels.Everything()
+	if listener.Routes.Selector != nil {
+		selector = labels.SelectorFromSet(listener.Routes.Selector.MatchLabels)
+	}
+
 	httpRoutes, err := client.GetHTTPRoutes(gateway.Namespace, selector)
 	if err != nil {
 		// update "ResolvedRefs" status true with "InvalidRoutesRef" reason
@@ -498,7 +503,7 @@ func gatewayHTTPRouteToHTTPConf(ctx context.Context, ep string, listener v1alpha
 			Status:             metav1.ConditionFalse,
 			LastTransitionTime: metav1.Now(),
 			Reason:             string(v1alpha1.ListenerReasonInvalidRoutesRef),
-			Message:            fmt.Sprintf("Cannot fetch %ss for namespace %q and matchLabels %v", listener.Routes.Kind, gateway.Namespace, listener.Routes.Selector.MatchLabels),
+			Message:            fmt.Sprintf("Cannot fetch %ss for namespace %q and selector %v", routeHTTPKind, gateway.Namespace, selector.String()),
 		}}
 	}
 
@@ -530,7 +535,7 @@ func gatewayHTTPRouteToHTTPConf(ctx context.Context, ep string, listener v1alpha
 					Status:             metav1.ConditionFalse,
 					LastTransitionTime: metav1.Now(),
 					Reason:             string(v1alpha1.ListenerReasonDegradedRoutes),
-					Message:            fmt.Sprintf("Skipping %s %s: cannot generate rule: %v", listener.Routes.Kind, httpRoute.Name, err),
+					Message:            fmt.Sprintf("Skipping %s %s: cannot generate rule: %v", routeHTTPKind, httpRoute.Name, err),
 				})
 			}
 
@@ -577,7 +582,7 @@ func gatewayHTTPRouteToHTTPConf(ctx context.Context, ep string, listener v1alpha
 						Status:             metav1.ConditionFalse,
 						LastTransitionTime: metav1.Now(),
 						Reason:             string(v1alpha1.ListenerReasonDegradedRoutes),
-						Message:            fmt.Sprintf("Cannot load service from %s %s/%s : %v", listener.Routes.Kind, gateway.Namespace, httpRoute.Name, err),
+						Message:            fmt.Sprintf("Cannot load service from %s %s/%s : %v", routeHTTPKind, gateway.Namespace, httpRoute.Name, err),
 					})
 
 					// TODO update the RouteStatus condition / deduplicate conditions on listener
@@ -604,7 +609,11 @@ func gatewayHTTPRouteToHTTPConf(ctx context.Context, ep string, listener v1alpha
 
 func gatewayTCPRouteToTCPConf(ctx context.Context, ep string, listener v1alpha1.Listener, gateway *v1alpha1.Gateway, client Client, conf *dynamic.Configuration) []metav1.Condition {
 	// TODO: support RouteNamespaces
-	selector := labels.SelectorFromSet(listener.Routes.Selector.MatchLabels)
+	selector := labels.Everything()
+	if listener.Routes.Selector != nil {
+		selector = labels.SelectorFromSet(listener.Routes.Selector.MatchLabels)
+	}
+
 	tcpRoutes, err := client.GetTCPRoutes(gateway.Namespace, selector)
 	if err != nil {
 		// update "ResolvedRefs" status true with "InvalidRoutesRef" reason
@@ -613,7 +622,7 @@ func gatewayTCPRouteToTCPConf(ctx context.Context, ep string, listener v1alpha1.
 			Status:             metav1.ConditionFalse,
 			LastTransitionTime: metav1.Now(),
 			Reason:             string(v1alpha1.ListenerReasonInvalidRoutesRef),
-			Message:            fmt.Sprintf("Cannot fetch %ss for namespace %q and matchLabels %v", listener.Routes.Kind, gateway.Namespace, listener.Routes.Selector.MatchLabels),
+			Message:            fmt.Sprintf("Cannot fetch %ss for namespace %q and selector %v", listener.Routes.Kind, gateway.Namespace, selector.String()),
 		}}
 	}
 
@@ -656,7 +665,7 @@ func gatewayTCPRouteToTCPConf(ctx context.Context, ep string, listener v1alpha1.
 					Status:             metav1.ConditionFalse,
 					LastTransitionTime: metav1.Now(),
 					Reason:             string(v1alpha1.ListenerReasonDegradedRoutes),
-					Message:            fmt.Sprintf("Skipping %s %s: cannot make router's key with rule %s: %v", listener.Routes.Kind, tcpRoute.Name, router.Rule, err),
+					Message:            fmt.Sprintf("Skipping %s %s: cannot make router's key with rule %s: %v", routeTCPKind, tcpRoute.Name, router.Rule, err),
 				})
 
 				// TODO update the RouteStatus condition / deduplicate conditions on listener
@@ -677,7 +686,7 @@ func gatewayTCPRouteToTCPConf(ctx context.Context, ep string, listener v1alpha1.
 					Status:             metav1.ConditionFalse,
 					LastTransitionTime: metav1.Now(),
 					Reason:             string(v1alpha1.ListenerReasonDegradedRoutes),
-					Message:            fmt.Sprintf("Cannot load service from %s %s/%s : %v", listener.Routes.Kind, gateway.Namespace, tcpRoute.Name, err),
+					Message:            fmt.Sprintf("Cannot load service from %s %s/%s : %v", routeTCPKind, gateway.Namespace, tcpRoute.Name, err),
 				})
 
 				// TODO update the RouteStatus condition / deduplicate conditions on listener
@@ -703,7 +712,11 @@ func gatewayTCPRouteToTCPConf(ctx context.Context, ep string, listener v1alpha1.
 
 func gatewayTLSRouteToTCPConf(ctx context.Context, ep string, listener v1alpha1.Listener, gateway *v1alpha1.Gateway, client Client, conf *dynamic.Configuration) []metav1.Condition {
 	// TODO: support RouteNamespaces
-	selector := labels.SelectorFromSet(listener.Routes.Selector.MatchLabels)
+	selector := labels.Everything()
+	if listener.Routes.Selector != nil {
+		selector = labels.SelectorFromSet(listener.Routes.Selector.MatchLabels)
+	}
+
 	tlsRoutes, err := client.GetTLSRoutes(gateway.Namespace, selector)
 	if err != nil {
 		// update "ResolvedRefs" status true with "InvalidRoutesRef" reason
@@ -712,7 +725,7 @@ func gatewayTLSRouteToTCPConf(ctx context.Context, ep string, listener v1alpha1.
 			Status:             metav1.ConditionFalse,
 			LastTransitionTime: metav1.Now(),
 			Reason:             string(v1alpha1.ListenerReasonInvalidRoutesRef),
-			Message:            fmt.Sprintf("Cannot fetch %ss for namespace %q and matchLabels %v", listener.Routes.Kind, gateway.Namespace, listener.Routes.Selector.MatchLabels),
+			Message:            fmt.Sprintf("Cannot fetch %ss for namespace %q and selector %v", routeTLSKind, gateway.Namespace, selector.String()),
 		}}
 	}
 
@@ -732,7 +745,7 @@ func gatewayTLSRouteToTCPConf(ctx context.Context, ep string, listener v1alpha1.
 					Status:             metav1.ConditionFalse,
 					LastTransitionTime: metav1.Now(),
 					Reason:             string(v1alpha1.ListenerReasonDegradedRoutes),
-					Message:            fmt.Sprintf("Skipping %s %s: cannot make route's SNI match: %v", listener.Routes.Kind, tlsRoute.Name, err),
+					Message:            fmt.Sprintf("Skipping %s %s: cannot make route's SNI match: %v", routeTLSKind, tlsRoute.Name, err),
 				})
 				// TODO update the RouteStatus condition / deduplicate conditions on listener
 				continue
@@ -760,7 +773,7 @@ func gatewayTLSRouteToTCPConf(ctx context.Context, ep string, listener v1alpha1.
 					Status:             metav1.ConditionFalse,
 					LastTransitionTime: metav1.Now(),
 					Reason:             string(v1alpha1.ListenerReasonDegradedRoutes),
-					Message:            fmt.Sprintf("Skipping %s %s: cannot make router's key with rule %s: %v", listener.Routes.Kind, tlsRoute.Name, router.Rule, err),
+					Message:            fmt.Sprintf("Skipping %s %s: cannot make router's key with rule %s: %v", routeTLSKind, tlsRoute.Name, router.Rule, err),
 				})
 
 				// TODO update the RouteStatus condition / deduplicate conditions on listener
@@ -781,7 +794,7 @@ func gatewayTLSRouteToTCPConf(ctx context.Context, ep string, listener v1alpha1.
 					Status:             metav1.ConditionFalse,
 					LastTransitionTime: metav1.Now(),
 					Reason:             string(v1alpha1.ListenerReasonDegradedRoutes),
-					Message:            fmt.Sprintf("Cannot load service from %s %s/%s : %v", listener.Routes.Kind, gateway.Namespace, tlsRoute.Name, err),
+					Message:            fmt.Sprintf("Cannot load service from %s %s/%s : %v", routeTLSKind, gateway.Namespace, tlsRoute.Name, err),
 				})
 
 				// TODO update the RouteStatus condition / deduplicate conditions on listener
