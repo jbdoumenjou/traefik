@@ -426,7 +426,6 @@ func (p *Provider) fillGatewayConf(ctx context.Context, client Client, gateway *
 			if !(listener.Protocol == v1alpha1.TLSProtocolType && isTLSPassthrough && listener.Routes.Kind == routeTLSKind ||
 				listener.Protocol == v1alpha1.TLSProtocolType && !isTLSPassthrough && listener.Routes.Kind == routeTCPKind ||
 				listener.Protocol == v1alpha1.HTTPSProtocolType && !isTLSPassthrough && listener.Routes.Kind == routeHTTPKind) {
-
 				// update "ConditionDetached" status true with "ReasonUnsupportedProtocol" reason
 				listenerStatuses[i].Conditions = append(listenerStatuses[i].Conditions, metav1.Condition{
 					Type:               string(v1alpha1.ListenerConditionDetached),
@@ -970,7 +969,7 @@ func extractRule(routeRule v1alpha1.HTTPRouteRule, hostRule string) (string, err
 		var matchRules []string
 		// TODO handle other path types
 		if match.Path != nil && match.Path.Type != nil && match.Path.Value != nil {
-			value := string(*match.Path.Value)
+			value := *match.Path.Value
 
 			switch *match.Path.Type {
 			case v1alpha1.PathMatchExact:
