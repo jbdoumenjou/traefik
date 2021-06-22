@@ -47,8 +47,8 @@ func (s *K8sSuite) TearDownSuite(c *check.C) {
 	s.composeProject.Stop(c)
 
 	generatedFiles := []string{
-		//"./fixtures/k8s/config.skip/kubeconfig.yaml",
-		//"./fixtures/k8s/config.skip/k3s.log",
+		"./fixtures/k8s/config.skip/kubeconfig.yaml",
+		"./fixtures/k8s/config.skip/k3s.log",
 		"./fixtures/k8s/coredns.yaml",
 		"./fixtures/k8s/rolebindings.yaml",
 		"./fixtures/k8s/traefik.yaml",
